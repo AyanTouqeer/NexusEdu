@@ -1,6 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let genAI: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!genAI) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not defined in the environment.");
+    }
+    genAI = new GoogleGenAI({ apiKey });
+  }
+  return genAI;
+}
 
 export interface AgentConfig {
   systemInstruction: string;
@@ -16,6 +27,7 @@ export class BaseAgent {
 
   async run(prompt: string) {
     try {
+      const ai = getAI();
       const response = await ai.models.generateContent({
         model: this.config.model,
         contents: prompt,
@@ -48,6 +60,11 @@ export class EdgeEducator extends BaseAgent {
     
     Respond as a Socratic tutor using guiding questions or analogies.`;
     
-    return await this.run(prompt);
+    try {
+      return await this.run(prompt);
+    } catch (error) {
+      console.warn("Edge Educator AI failed, using fallback mock response.");
+      return "Socratic Tutor Mode: Let's dive into that! But before I just give you the answer, how would you break this topic down into smaller, logical steps?";
+    }
   }
 }

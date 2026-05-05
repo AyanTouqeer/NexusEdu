@@ -19,13 +19,9 @@ import {
   MessageSquare,
   Send
 } from 'lucide-react';
-import { EdgeEducator } from './agents/EdgeEducator';
-import { SyncManager } from './agents/SyncManager';
-import { ContextTranslator } from './agents/ContextTranslator';
 import { storage } from './core/storage';
 import { UserState, StudySession, StudentQuery } from './types';
-
-const educator = new EdgeEducator();
+import { SyncManager } from './agents/SyncManager';
 
 export default function App() {
   const [state, setState] = useState<UserState>(storage.getState());

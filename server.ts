@@ -48,6 +48,41 @@ async function startServer() {
     });
   });
 
+  // Deep Sync Agent Trigger
+  app.get("/api/trigger-sync", async (req, res) => {
+    // Run in background without blocking response
+    import("./src/agents/SyncAgentService.ts").then(({ syncAgent }) => {
+      syncAgent.processOfflineQueue().catch(err => console.error("Background sync failed:", err));
+    });
+    
+    res.json({ 
+      status: "Sync initiated", 
+      message: "Checking offline queue in the background..." 
+    });
+  });
+
+  app.get("/api/synced-results/:student_id", (req, res) => {
+    try {
+      const results = offlineStorage.getSyncedResults(req.params.student_id);
+      res.json(results);
+    } catch (error) {
+      console.error("Fetch synced results error:", error);
+      res.status(500).json({ error: "Failed to fetch synced results" });
+    }
+  });
+
+  // Deep Sync Agent Trigger (Legacy POST for compatibility)
+  app.post("/api/sync", async (req, res) => {
+    try {
+      const { syncAgent } = await import("./src/agents/SyncAgentService.ts");
+      const result = await syncAgent.processOfflineQueue();
+      res.json(result);
+    } catch (error) {
+      console.error("Manual sync error:", error);
+      res.status(500).json({ error: "Sync processing failed" });
+    }
+  });
+
   // Offline Storage API
   app.post("/api/queries", (req, res) => {
     try {
