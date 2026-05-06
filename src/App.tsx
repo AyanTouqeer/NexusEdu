@@ -25,7 +25,7 @@ import { SyncManager } from './agents/SyncManager';
 
 export default function App() {
   const [state, setState] = useState<UserState>(storage.getState());
-  const [isOnline, setIsOnline] = useState(SyncManager.isOnline());
+  const [isOnline, setIsOnline] = useState(true);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'study' | 'achievements'>('study');
   
@@ -37,18 +37,19 @@ export default function App() {
   const [showGamifyPrompt, setShowGamifyPrompt] = useState(false);
 
   useEffect(() => {
-    const handleStatusChange = () => {
-      const online = SyncManager.isOnline();
-      setIsOnline(online);
-      if (online) {
-        SyncManager.syncOfflineQueries();
+    const handleStatusChange = async () => {
+      const backendReady = await SyncManager.isBackendAlive();
+      setIsOnline(backendReady);
+      if (backendReady) {
+        SyncManager.syncToLocalDatabase();
       }
     };
+    
     window.addEventListener('online', handleStatusChange);
     window.addEventListener('offline', handleStatusChange);
     
     // Initial sync
-    if (navigator.onLine) SyncManager.syncOfflineQueries();
+    handleStatusChange();
 
     return () => {
       window.removeEventListener('online', handleStatusChange);
@@ -107,7 +108,6 @@ export default function App() {
     setLoading(true);
 
     try {
-      // Call the new modular backend endpoint
       const response = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,7 +116,7 @@ export default function App() {
           question: currentQuery,
           subject: activeSession.subject,
           topic: activeSession.topic,
-          requires_deep_research: currentQuery.length > 200 // Example logic: long queries are "deep"
+          requires_deep_research: currentQuery.length > 200 
         })
       });
       
@@ -125,13 +125,13 @@ export default function App() {
       
       setConversation(prev => [...prev, { role: 'tutor', text: answer }]);
       
-      setState(prev => ({
+      setState((prev: UserState) => ({
         ...prev,
         points: prev.points + (data.status === 'success' ? 10 : 5)
       }));
 
     } catch (error) {
-      setConversation(prev => [...prev, { role: 'tutor', text: "The network seems faint, but I've saved your thought for later!" }]);
+      setConversation((prev: {role: 'student' | 'tutor', text: string}[]) => [...prev, { role: 'tutor', text: "The network seems faint, but I've saved your thought for later!" }]);
     } finally {
       setLoading(false);
     }
@@ -140,7 +140,6 @@ export default function App() {
   const handleEndSession = () => {
     if (!activeSession) return;
     
-    // Extract a snippet of the conversation (last tutor message)
     const tutorMessages = conversation.filter(m => m.role === 'tutor');
     const snippet = tutorMessages.length > 0 
       ? tutorMessages[tutorMessages.length - 1].text.substring(0, 150) + '...'
@@ -166,6 +165,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F0] text-[#141414] font-sans selection:bg-orange-200 pb-20">
+      
       {/* Header */}
       <header className="border-b border-[#141414]/10 bg-white/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
@@ -175,7 +175,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">NEXUS EDU</h1>
-              <p className="text-[10px] uppercase tracking-widest opacity-50 font-semibold italic">Edge Learning Multi-Agent Network</p>
+              <p className="text-[10px] uppercase tracking-widest opacity-50 font-semibold italic">Engineered by infinityARC Studios</p>
             </div>
           </div>
           
@@ -199,6 +199,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* Main Content Area */}
       <main className="max-w-6xl mx-auto px-6 py-12">
         {/* Navigation Tabs */}
         <div className="flex gap-8 mb-12 border-b border-[#141414]/5">
@@ -474,6 +475,11 @@ export default function App() {
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-[#141414]" />
             v1.0.4 {new Date().getFullYear()}
+          </div>
+          {/* New infinityARC Studios Branding Node */}
+          <div className="flex items-center gap-2 text-[#141414] opacity-80">
+            <div className="w-2 h-2 rounded-full bg-orange-500" />
+            © {new Date().getFullYear()} infinityARC Studios
           </div>
         </div>
       </footer>
