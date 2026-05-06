@@ -1,19 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
 import { offlineStorage } from "../core/database.ts";
 import crypto from "crypto";
 
-let genAI: GoogleGenAI | null = null;
-
-function getAI() {
-  if (!genAI) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not defined in the environment.");
-    }
-    genAI = new GoogleGenAI({ apiKey });
-  }
-  return genAI;
-}
+// The Google GenAI imports and setup have been completely removed!
 
 export class SyncAgent {
   async processOfflineQueue() {
@@ -31,26 +19,36 @@ export class SyncAgent {
       try {
         console.log(`SyncAgent: Processing query ${item.id} for student ${item.student_id}...`);
         
-        // Generate deep answer
         const prompt = `Deep Research Required for Student Query: "${item.query}"
         Please provide a detailed explanation, examples, and key takeaways.`;
         
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: prompt,
-          config: {
-            systemInstruction: "You are the NexusEdu Deep Research Agent. Provide detailed, comprehensive, and accurate answers to educational queries that were queued for offline processing."
-          }
+        // 1. Direct API call to your local hardware (Ollama)
+        const response = await fetch("http://localhost:11434/api/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "phi3", // Using your local downloaded model
+            prompt: prompt,
+            system: "You are the NexusEdu Deep Research Agent. Provide detailed, comprehensive, and accurate answers to educational queries that were queued for offline processing.",
+            stream: false, // Wait for the full deep-dive answer to generate
+          }),
         });
-        const cloudAnswer = response.text;
 
-        // Save result and update status
+        if (!response.ok) {
+          throw new Error(`Ollama connection failed with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const deepAnswer = data.response; // The AI's offline response!
+
+        // 2. Save result back to the local SQLite database
         offlineStorage.saveSyncResult({
           id: crypto.randomUUID(),
           student_id: item.student_id,
           original_query_id: item.id,
-          cloud_answer: cloudAnswer
+          cloud_answer: deepAnswer // Keeping the property name to match your DB schema, even though it's local now!
         });
 
         offlineStorage.updateSyncStatus(item.id, 'completed');
@@ -58,7 +56,7 @@ export class SyncAgent {
         
         console.log(`SyncAgent: Successfully processed query ${item.id}`);
       } catch (error) {
-        console.error(`SyncAgent: Failed to process query ${item.id} due to network/API failure. Leaving as pending.`, error);
+        console.error(`SyncAgent: Failed to process query ${item.id} locally. Leaving as pending.`, error);
       }
     }
 
